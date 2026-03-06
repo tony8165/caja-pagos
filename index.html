@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caja de Pagos Pro+</title>
+
+<style>
+body { font-family: Arial; background:#254b02; padding:10px; }
+.app { max-width:420px; margin:auto; background:#cbe764; padding:10px; border-radius:12px; }
+input, select { width:92%; padding:6px; margin:4px auto; display:block; font-size:14px; }
+button { width:94%; padding:8px; margin:6px auto; display:block; font-size:14px; background:#042c9b; color:white; border:none; border-radius:6px; }
+button.eliminar { background:#630428; }
+button.reporte { background:#00695c; }
+button.borrarDia { background:#8b0000; }
+.total { font-size:18px; text-align:center; margin:8px 0; }
+.compra { background:#f3f1f1; padding:8px; border-radius:8px; margin-top:8px; }
+.resumen { background:#e0f7fa; padding:8px; border-radius:8px; margin-top:8px; font-size:14px; }
+.controlCaja { background:#fff3cd; padding:8px; border-radius:8px; margin-top:8px; }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+<h2>Caja de Pagos Pro+</h2>
+<p id="fecha"></p>
+
+<select id="selectorFecha" onchange="cambiarFecha()"></select>
+
+<div class="controlCaja">
+    <strong>💰 Control de Caja</strong>
+    <input type="number" id="cajaInicial" placeholder="Caja inicial">
+    <input type="number" id="dineroFinal" placeholder="Dinero contado al final">
+</div>
+
+<input type="text" id="cliente" placeholder="Nombre del cliente">
+<input type="number" id="precio" placeholder="Precio">
+<input type="number" id="cantidad" placeholder="Cantidad">
+
+<button onclick="agregarProducto()">Agregar producto</button>
+<button onclick="finalizarCompra()">Finalizar compra</button>
+
+<h3>Historial</h3>
+<div id="historial"></div>
+
+<div class="resumen" id="resumenDia"></div>
+
+<button class="reporte" onclick="imprimirReporte()">🧾 Imprimir reporte</button>
+<button class="eliminar" onclick="cerrarDia()">Cerrar día</button>
+<button class="borrarDia" onclick="borrarDia()">Borrar día</button>
+
+</div>
+
+<script>
+
+/* ==============================
+   INICIO
+============================== */
+
+const hoy = new Date().toLocaleDateString();
+document.getElementById("fecha").innerText = "Fecha actual: " + hoy;
+
+let caja = JSON.parse(localStorage.getItem("caja")) || {};
+if (!caja[hoy]) {
+    caja[hoy] = {
+        ventas: [],
+        cajaInicial: 0,
+        dineroFinal: 0
+    };
+}
+
+let fechaActual = hoy;
+cargarFechas();
+actualizarTodo();
+
+/* ==============================
+   GUARDAR
+============================== */
+
+function guardarCaja() {
+    localStorage.setItem("caja", JSON.stringify(caja));
+}
+
+/* ==============================
+   FECHAS
+============================== */
+
+function cargarFechas() {
+    const sel = document.getElementById("selectorFecha");
+    sel.innerHTML = "";
+    Object.keys(caja).forEach(f => {
+        let opt = document.createElement("option");
+        opt.value = f;
+        opt.textContent = f;
+        if (f === fechaActual) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+function cambiarFecha() {
+    fechaActual = document.getElementById("selectorFecha").value;
+    actualizarTodo();
+}
+
+/* ==============================
+   PRODUCTOS
+============================== */
+
+function agregarProducto() {
+    let precio = Number(document.getElementById("precio").value);
+    let cantidad = Number(document.getElementById("cantidad").value);
+    let cliente = document.getElementById("cliente").value || "Sin nombre";
+
+    if (precio <= 0 || cantidad <= 0) return alert("Datos inválidos");
+
+    caja[fechaActual].ventas.push({
+        cliente,
+        precio,
+        cantidad
+    });
+
+    guardarCaja();
+    document.getElementById("precio").value="";
+    document.getElementById("cantidad").value="";
+    actualizarTodo();
+}
+
+function finalizarCompra(){}
+
+/* ==============================
+   HISTORIAL
+============================== */
+
+function mostrarHistorial() {
+    let cont = document.getElementById("historial");
+    cont.innerHTML = "";
+
+    caja[fechaActual].ventas.forEach(v => {
+        let total = v.precio * v.cantidad;
+        cont.innerHTML += `
+        <div class="compra">
+            <strong>${v.cliente}</strong><br>
+            ₡${v.precio} x ${v.cantidad} = ₡${total}
+        </div>`;
+    });
+}
+
+/* ==============================
+   RESUMEN + CONTROL CAJA
+============================== */
+
+function generarResumen() {
+
+    let data = caja[fechaActual];
+
+    let totalVentas = 0;
+    data.ventas.forEach(v => totalVentas += v.precio * v.cantidad);
+
+    let cajaInicial = Number(document.getElementById("cajaInicial").value) || 0;
+    let dineroFinal = Number(document.getElementById("dineroFinal").value) || 0;
+
+    data.cajaInicial = cajaInicial;
+    data.dineroFinal = dineroFinal;
+
+    guardarCaja();
+
+    let esperado = cajaInicial + totalVentas;
+    let diferencia = dineroFinal - esperado;
+
+    document.getElementById("resumenDia").innerHTML = `
+        📊 <strong>Resumen del día</strong><br>
+        Ventas: ₡${totalVentas}<br>
+        Caja inicial: ₡${cajaInicial}<br>
+        Total esperado: ₡${esperado}<br>
+        Dinero contado: ₡${dineroFinal}<br>
+        Diferencia: ₡${diferencia}
+    `;
+}
+
+/* ==============================
+   REPORTE
+============================== */
+
+function imprimirReporte() {
+    generarResumen();
+    let contenido = `
+        <h2>Reporte Caja</h2>
+        <p>Fecha: ${fechaActual}</p>
+        <hr>
+        ${document.getElementById("historial").innerHTML}
+        <hr>
+        ${document.getElementById("resumenDia").innerHTML}
+    `;
+
+    let ventana = window.open("", "", "width=600,height=600");
+    ventana.document.write(contenido);
+    ventana.document.close();
+    ventana.print();
+}
+
+/* ==============================
+   CERRAR Y BORRAR
+============================== */
+
+function cerrarDia() {
+    if (!confirm("¿Cerrar día?")) return;
+    caja[fechaActual + " (CERRADO)"] = caja[fechaActual];
+    delete caja[fechaActual];
+    guardarCaja();
+    location.reload();
+}
+
+function borrarDia() {
+    if (!confirm("¿Eliminar día completo?")) return;
+    delete caja[fechaActual];
+    guardarCaja();
+    location.reload();
+}
+
+/* ==============================
+   ACTUALIZAR TODO
+============================== */
+
+function actualizarTodo() {
+
+    if (!caja[fechaActual].ventas)
+        caja[fechaActual] = { ventas:[], cajaInicial:0, dineroFinal:0 };
+
+    document.getElementById("cajaInicial").value = caja[fechaActual].cajaInicial || "";
+    document.getElementById("dineroFinal").value = caja[fechaActual].dineroFinal || "";
+
+    mostrarHistorial();
+    generarResumen();
+}
+
+</script>
+</body>
+</html>
